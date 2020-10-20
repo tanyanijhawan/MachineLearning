@@ -1,0 +1,130 @@
+---
+title: "PMLProj"
+author: "Tanya Nijhawan"
+date: "10/19/2020"
+output: html_document
+---
+install.packages("e1071")
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+
+Predicting the manner, in which particpants,  performed the exercise with the help of the _Weight Lifting Exercise Dataset_ from the website :: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har
+
+The data is collected from the arm,forearm,belt and dumbells of 6 participants.
+
+## Importing of the Libraries and Loading the Data-
+
+```{r}
+library(caret)
+library(randomForest)
+library(Metrics)
+trainData <- read.csv("pml-training.csv",header=TRUE,na.strings=c("NA",""))
+testData <- read.csv("pml-testing.csv",header=TRUE,na.strings=c("NA",""))
+#replacing all strings such as NA and empty strings to NA value of R
+```
+
+Dimensions of training and testing data::
+```{r}
+dim(trainData)
+dim(testData)
+
+```
+
+## Preprocessing or the Cleaning of Data-
+
+1. Eliminate variables - that have a variance equal to or close to zero.
+2. Drop the missing value...
+3. Drop all the unnecessary columns...
+```{r}
+# Remove near zero covariates
+NSV <- nearZeroVar(trainData,saveMetrics=TRUE)
+trainData <- trainData[,!NSV$nzv]
+testData <- testData[,!NSV$nzv]
+
+# Drop missing values
+train_filt_na <- trainData[,(colSums(is.na(trainData)) == 0)]
+test_filt_na <- testData[,(colSums(is.na(testData)) == 0)]
+
+# Drop unnecessary columns
+rmCol_train <- c("user_name","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp","num_window")
+rmCol_test <- c("user_name","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp","num_window","problem_id")
+trainData_rmCol <- train_filt_na[,!(names(train_filt_na) %in% rmCol_train)]
+testData_rmCol <- test_filt_na[,!(names(test_filt_na) %in% rmCol_test)]
+
+```
+The dimensions are:
+```{r}
+dim(trainData_rmCol)
+dim(testData_rmCol)
+```
+
+## Partitioning of the Dataset
+
+We will create the training and validation dataset.
+
+```{r}
+inTrain <- createDataPartition(y=trainData$classe, p=0.7, list=FALSE)
+train_clean <- trainData_rmCol[inTrain,]
+valid_clean <- trainData_rmCol[-inTrain,]
+```
+
+```{r}
+cor <- abs(sapply(colnames(train_clean[, -ncol(trainData)]), function(x) cor(as.numeric(train_clean[, x]), as.numeric(train_clean$classe), method = "spearman")))
+```
+No predictors seem to be strongly correlated with the outcome. Linear regression may not be a good option.Therefore we select random forest model.
+
+## Random Forest Model
+
+We attempt to fit a random forest model and test the model performance on the validation set.
+```{r}
+set.seed(71)
+
+# Fit randomforest model
+model <- train(classe ~ ., method = "rf", data = train_clean, importance = TRUE, trControl = trainControl(method = "cv", number = 4))
+model
+```
+
+
+```{r}
+valid_pred <- predict(model, newdata=valid_clean)
+
+# To check the performance of the model
+confusionMatrix(valid_pred,valid_clean$classe)
+```
+
+## Prediction
+
+We now use this model to predict on the testing data.
+
+```{r}
+test_pred <- predict(model, newdata=testData_rmCol)
+write_files <- function(x) {
+        n <- length(x)
+        for (i in 1:n) {
+                filename <- paste0("problem_id", i, ".txt")
+                write.table(x[i], file=filename, quote=FALSE, row.names=FALSE,col.names=FALSE)
+        }
+}
+write_files(test_pred)
+
+```
+
+
+## Results
+
+We used 52 variables to build the random forest model with 100 trees using 4 fold cross validation. 
+
+
+
+
+
+
+
+
+
+
+
